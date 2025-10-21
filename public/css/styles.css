@@ -1,0 +1,21 @@
+/* Basic responsive styling for the EJS templates */
+body{font-family:Inter,Arial,Helvetica,sans-serif;margin:0;color:#222;background:#f6f8fa}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:#fff;border-bottom:1px solid #e6e9ef}
+.topbar .brand a{font-weight:700;color:#333;text-decoration:none}
+.topbar .right .username{margin-right:10px}
+.container{max-width:1000px;margin:24px auto;padding:0 16px}
+.centered{max-width:700px;margin:48px auto;text-align:center}
+.roles{display:flex;gap:16px;justify-content:center;margin-top:24px}
+.card{display:inline-block;padding:24px 32px;border-radius:12px;background:#fff;box-shadow:0 4px 14px rgba(20,20,40,0.04);text-decoration:none;color:#222}
+.form-container{max-width:620px;margin:32px auto;background:#fff;padding:20px;border-radius:10px;box-shadow:0 6px 24px rgba(20,20,40,0.04)}
+.form-container label{display:block;margin-bottom:10px;font-size:14px}
+.form-container input[type=text],.form-container input[type=email],.form-container input[type=password],.form-container textarea{width:100%;padding:10px;border:1px solid #dfe4ea;border-radius:6px}
+.btn{display:inline-block;padding:8px 14px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer}
+.btn.small{padding:6px 10px;font-size:13px}
+.list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.doctor-card{background:#fff;padding:12px;border-radius:10px;box-shadow:0 4px 10px rgba(20,20,40,0.04)}
+.request-item,.pres{background:#fff;padding:12px;border-radius:8px;margin-bottom:8px}
+.chat{max-width:800px;margin:24px auto;padding:16px;background:#fff;border-radius:10px}
+#messages{min-height:200px;border:1px solid #e6e9ef;padding:12px;border-radius:6px;margin-bottom:8px;overflow:auto}
+footer{padding:20px;text-align:center;color:#666}
+@media (max-width:600px){.roles{flex-direction:column;align-items:center}.container{padding:12px}}

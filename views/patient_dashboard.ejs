@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Patient Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/client-sockets.js" defer></script>
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <main class="container">
+    <h2>Welcome, <%= user.name %> </h2>
+
+    <p>
+      Your location: 
+      <%= user.location?.lat ? `${user.location.lat.toFixed(4)}, ${user.location.lng.toFixed(4)}` : 'Not set' %>
+      <button id="updateLocation" class="btn small">Update Location</button>
+    </p>
+
+    <section>
+      <h3>Available Doctors Near You</h3>
+
+      <% if (doctors.length === 0) { %>
+        <p>No approved doctors available yet.</p>
+      <% } else { %>
+        <div class="list">
+          <% doctors.forEach(function(doc) { %>
+            <div class="doctor-card">
+              <h4><%= doc.name %></h4>
+              <p>Email: <%= doc.email %></p>
+              <p>
+                Location: 
+                <%= doc.location?.lat 
+                  ? doc.location.lat.toFixed(4) + ', ' + doc.location.lng.toFixed(4) 
+                  : 'Not set' %>
+              </p>
+              <form action="/patient/request/<%= doc._id %>" method="POST" style="display:inline;">
+                <button type="submit" class="btn">Request Consultation</button>
+              </form>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </section>
+
+    <p>
+      <a href="/patient/consultations" class="btn">View Consultations</a> 
+      <a href="/patient/prescriptions" class="btn">Prescriptions</a>
+    </p>
+  </main>
+
+  <script>
+    // ========================
+    // SOCKET ROOM JOIN
+    // ========================
+    const currentUser = <%- JSON.stringify(user) %>;
+    if (window.HealthSockets && currentUser) {
+      window.HealthSockets.joinPersonalRoom(currentUser.role, currentUser._id);
+    }
+
+    // ========================
+    // GEOLOCATION UPDATE
+    // ========================
+    document.getElementById('updateLocation').addEventListener('click', () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          await fetch('/patient/location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: latitude, lng: longitude })
+          });
+          alert('Location updated. Refreshing...');
+          location.reload();
+        }, () => alert('Failed to get location.'));
+      } else {
+        alert('Geolocation not supported.');
+      }
+    });
+  </script>
+
+  <style>
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .doctor-card {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      background: #f9f9f9;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 8px 14px;
+      background: #007bff;
+      color: #fff;
+      text-decoration: none;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .btn:hover {
+      background: #0056b3;
+    }
+
+    .btn.small {
+      padding: 5px 10px;
+      font-size: 0.85em;
+    }
+
+    .list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+  </style>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

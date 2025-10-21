@@ -1,0 +1,13 @@
+<header>
+  <nav class="topbar">
+    <div class="brand"><a href="/">HealthApp</a></div>
+    <div class="right">
+      <% if (currentUser) { %>
+        <span class="username"><%= currentUser.name %>  (<%= currentUser.role %>)</span>
+        <a href="/logout" class="btn small">Logout</a>
+      <% } else { %>
+        <a href="/select-role" class="btn small">Get Started</a>
+      <% } %>
+    </div>
+  </nav>
+</header>

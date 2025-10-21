@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pharmacy Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/client-sockets.js" defer></script>
+</head>
+<body>
+  <%- include('partials/header') %>
+  <main class="container">
+    <h2>Welcome, <%= user.name %></h2>
+    <section>
+      <h3>New Prescriptions</h3>
+      <% if (!pres || !pres.length) { %>
+        <p>No prescriptions</p>
+      <% } %>
+      <% pres.forEach(p => { %>
+        <div class="pres">
+          <p>From Dr: <%= p.doctor ? p.doctor.name : 'N/A' %></p>
+          <p>Items: <%= p.items.map(i=>i.name).join(', ') %></p>
+          <p>Patient: <%= p.patient ? p.patient.name : 'N/A' %></p>
+          <button class="btn accept" data-id="<%= p._id %>">Accept</button>
+        </div>
+      <% }) %>
+    </section>
+  </main>
+
+  <script>
+    const currentUser = <%- JSON.stringify(user) %>;
+    if (window.HealthSockets && currentUser) {
+      window.HealthSockets.joinPersonalRoom(currentUser.role, currentUser._id);
+    }
+
+    document.querySelectorAll('.accept').forEach(b => {
+      b.addEventListener('click', async ()=>{
+        const res = await fetch(`/pharmacy/accept/${b.dataset.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const j = await res.json();
+        if (j.ok) alert('Accepted'); else alert('Error');
+        location.reload();
+      });
+    });
+  </script>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

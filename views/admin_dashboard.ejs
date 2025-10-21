@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+  <main class="container">
+    <h2>Admin Control Panel</h2>
+    <section>
+      <h3>Doctors</h3>
+      <% doctors.forEach(d=>{ %>
+        <div class="request-item">
+          <p><strong><%= d.name %></strong> — <%= d.email %> — Approved: <%= !!d.approved %></p>
+          <% if (!d.approved) { %>
+            <button class="btn approve-doctor" data-id="<%= d._id %>">Approve</button>
+          <% } %>
+          <button class="btn delete" data-role="doctor" data-id="<%= d._id %>">Delete</button>
+        </div>
+      <% }) %>
+    </section>
+    <section>
+      <h3>Pharmacies</h3>
+      <% pharmacies.forEach(p=>{ %>
+        <div class="request-item">
+          <p><strong><%= p.name %></strong> — <%= p.email %> — Approved: <%= !!p.approved %></p>
+          <% if (!p.approved) { %>
+            <button class="btn approve-pharmacy" data-id="<%= p._id %>">Approve</button>
+          <% } %>
+          <button class="btn delete" data-role="pharmacy" data-id="<%= p._id %>">Delete</button>
+        </div>
+      <% }) %>
+    </section>
+    <section>
+      <h3>Patients</h3>
+      <% patients.forEach(pt=>{ %>
+        <div class="request-item">
+          <p><strong><%= pt.name %></strong> — <%= pt.email %></p>
+          <button class="btn delete" data-role="patient" data-id="<%= pt._id %>">Delete</button>
+        </div>
+      <% }) %>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll('.approve-doctor').forEach(b=>b.addEventListener('click', async ()=>{
+      const id = b.dataset.id;
+      await fetch(`/admin/approve/doctor/${id}`, { method: 'POST' });
+      alert('Approved'); location.reload();
+    }));
+    document.querySelectorAll('.approve-pharmacy').forEach(b=>b.addEventListener('click', async ()=>{
+      const id = b.dataset.id;
+      await fetch(`/admin/approve/pharmacy/${id}`, { method: 'POST' });
+      alert('Approved'); location.reload();
+    }));
+    document.querySelectorAll('.delete').forEach(b=>b.addEventListener('click', async ()=>{
+      const id = b.dataset.id; const role = b.dataset.role;
+      await fetch(`/admin/delete/${role}/${id}`, { method: 'DELETE' });
+      alert('Deleted'); location.reload();
+    }));
+  </script>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

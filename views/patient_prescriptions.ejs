@@ -1,0 +1,16 @@
+<%- include('partials/header') %>
+<main class="container">
+  <h2>Your Prescriptions</h2>
+  <% if (!pres || pres.length===0) { %>
+    <p>No prescriptions yet.</p>
+  <% } else { %>
+    <% pres.forEach(p => { %>
+      <div class="pres">
+        <p><strong>From:</strong> Dr. <%= p.doctor ? p.doctor.name : 'N/A' %></p>
+        <p><strong>Items:</strong> <%= p.items.map(i=>`${i.name} (${i.qty})`).join(', ') %></p>
+        <p><strong>Fulfilled by:</strong> <%= p.acceptedBy ? p.acceptedBy : 'Pending' %></p>
+      </div>
+    <% }) %>
+  <% } %>
+</main>
+<%- include('partials/footer') %>

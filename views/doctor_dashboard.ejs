@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Doctor Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/client-sockets.js" defer></script>
+  <style>
+    .tab-buttons { margin-bottom: 20px; }
+    .tab-buttons button {
+      margin-right: 10px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    .tab-buttons button.active { background: #0056b3; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .request-item {
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 6px;
+    }
+    .btn {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      margin-right: 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { background: #0056b3; }
+    .btn.decline { background: #dc3545; }
+    .btn.chat { background: #28a745; }
+    .btn.end { background: #6c757d; }
+
+    .notification {
+      background: #ffc107;
+      color: black;
+      padding: 5px 10px;
+      border-radius: 5px;
+      margin-left: 10px;
+      font-size: 12px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <main class="container">
+    <h2>Welcome, Dr. <%= user.name %></h2>
+
+    <!-- TAB BUTTONS -->
+    <div class="tab-buttons">
+      <button class="active" data-tab="pending">Pending</button>
+      <button data-tab="accepted">Accepted</button>
+      <button data-tab="completed">Completed</button>
+    </div>
+
+    <!-- PENDING CONSULTATIONS -->
+    <section id="pending" class="tab-content active">
+      <% if (!pending || pending.length === 0) { %>
+        <p>No pending requests</p>
+      <% } else { %>
+        <% pending.forEach(c => { %>
+          <div class="request-item" data-id="<%= c._id %>">
+            <p><strong>Patient:</strong> <%= c.patient?.name || 'Unknown' %> — <%= c.patient?.email || '' %></p>
+            <button class="btn accept-btn" data-id="<%= c._id %>">Accept</button>
+            <button class="btn decline decline-btn" data-id="<%= c._id %>">Decline</button>
+          </div>
+        <% }) %>
+      <% } %>
+    </section>
+
+    <!-- ACCEPTED CONSULTATIONS -->
+    <section id="accepted" class="tab-content">
+      <% if (!accepted || accepted.length === 0) { %>
+        <p>No accepted consultations</p>
+      <% } else { %>
+        <% accepted.forEach(c => { %>
+          <div class="request-item">
+            <p><strong>Patient:</strong> <%= c.patient?.name || 'Unknown' %> — <%= c.patient?.email || '' %></p>
+            <a class="btn chat" href="/doctor/chat/<%= c._id %>">Open Chat</a>
+
+            <!-- Prescribe button redirects to prescribe page -->
+            <a class="btn" href="/doctor/prescribe/<%= c._id %>">Prescribe</a>
+
+            <!-- End Consultation -->
+            <form class="end-form" data-id="<%= c._id %>" style="display:inline;">
+              <button class="btn end" type="submit">End Consultation</button>
+            </form>
+
+            <span class="notification" id="notif-<%= c._id %>">New message!</span>
+          </div>
+        <% }) %>
+      <% } %>
+    </section>
+
+    <!-- COMPLETED CONSULTATIONS -->
+    <section id="completed" class="tab-content">
+      <% if (!completed || completed.length === 0) { %>
+        <p>No completed consultations yet</p>
+      <% } else { %>
+        <% completed.forEach(c => { %>
+          <div class="request-item">
+            <p><strong>Patient:</strong> <%= c.patient?.name || 'Unknown' %> — <%= c.patient?.email || '' %></p>
+            <p>Status: <%= c.status %></p>
+          </div>
+        <% }) %>
+      <% } %>
+    </section>
+  </main>
+
+  <script>
+    const currentUser = <%- JSON.stringify(user) %>;
+    const socket = io();
+
+    if (currentUser) {
+      socket.emit('joinRoom', { consultationId: 'doctor-' + currentUser._id });
+    }
+
+    // Tab switching
+    document.querySelectorAll('.tab-buttons button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Accept consultation
+    document.querySelectorAll('.accept-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const res = await fetch(`/doctor/approve/${id}`, { method: 'POST' });
+        if (res.ok) {
+          window.location.href = `/doctor/chat/${id}`;
+        } else {
+          alert('Error accepting request.');
+        }
+      });
+    });
+
+    // Decline consultation
+    document.querySelectorAll('.decline-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const res = await fetch(`/doctor/decline/${id}`, { method: 'POST' });
+        if (res.ok) {
+          alert('Declined.');
+          btn.closest('.request-item').remove();
+        } else {
+          alert('Error declining request.');
+        }
+      });
+    });
+
+    // End consultation
+    document.querySelectorAll('.end-form').forEach(form => {
+      form.addEventListener('submit', async e => {
+        e.preventDefault();
+        const id = form.dataset.id;
+        const res = await fetch(`/doctor/end/${id}`, { method: 'POST' });
+        const j = await res.json();
+        if (j.ok) {
+          alert('Consultation ended.');
+          form.closest('.request-item').remove();
+        } else alert('Error ending consultation.');
+      });
+    });
+
+    // New message notification
+    socket.on('message', (data) => {
+      const notif = document.getElementById('notif-' + data.consultationId);
+      if (notif) {
+        notif.style.display = 'inline-block';
+        setTimeout(() => notif.style.display = 'none', 5000);
+      }
+    });
+  </script>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

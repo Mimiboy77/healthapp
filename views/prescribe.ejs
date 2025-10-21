@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Prescribe Medicines</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <main class="container">
+    <h2>Prescribe for <%= consultation.patient.name %></h2>
+
+    <form id="prescriptionForm" method="POST" action="/doctor/prescribe/<%= consultation._id %>">
+      <div id="medicineList">
+        <div>
+          <input type="text" name="name" placeholder="Medicine Name" required>
+          <input type="text" name="dose" placeholder="Dose" required>
+          <input type="number" name="qty" placeholder="Qty" required>
+        </div>
+      </div>
+      <button type="button" id="addMedicine">Add Another Medicine</button>
+      <br><br>
+      <button type="submit">Send Prescription</button>
+    </form>
+  </main>
+
+  <script>
+    // Add medicine dynamically
+    document.getElementById('addMedicine').addEventListener('click', () => {
+      const div = document.createElement('div');
+      div.innerHTML = `<input type="text" name="name" placeholder="Medicine Name" required>
+                       <input type="text" name="dose" placeholder="Dose" required>
+                       <input type="number" name="qty" placeholder="Qty" required>`;
+      document.getElementById('medicineList').appendChild(div);
+    });
+  </script>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

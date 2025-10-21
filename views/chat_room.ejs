@@ -1,0 +1,181 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Consultation Chat</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <main class="chat">
+    <h3>
+      Consultation Chat with <%= chatPartner.name %> (<%= chatPartner.role %>)
+    </h3>
+
+    <% if (consultation.status === 'completed') { %>
+      <p style="color:green;">This consultation is completed.</p>
+      <form action="/patient/request/new" method="POST">
+        <button type="submit" class="btn">Request New Doctor</button>
+      </form>
+    <% } %>
+
+    <!-- Chat Messages -->
+    <div id="messages" class="messages">
+      <% if (consultation.messages && consultation.messages.length > 0) { %>
+        <% consultation.messages.forEach(msg => { %>
+          <div class="msg" id="msg-<%= new Date(msg.timestamp).getTime() %>">
+            <strong><%= msg.sender %>:</strong> <%= msg.message %>
+            <small style="color:#777;">(<%= new Date(msg.timestamp).toLocaleString() %>)</small>
+          </div>
+        <% }) %>
+      <% } else { %>
+        <p style="color:#777;">No messages yet. Start the conversation!</p>
+      <% } %>
+    </div>
+
+    <% if (consultation.status !== 'completed') { %>
+      <div class="chat-input">
+        <input id="msg" placeholder="Type a message..." autocomplete="off">
+        <button id="send">Send</button>
+      </div>
+    <% } %>
+  </main>
+
+  <script>
+    const consultationId = "<%= consultation._id %>";
+    const currentUser = <%- JSON.stringify(user) %>;
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('msg');
+    const sendBtn = document.getElementById('send');
+
+    const socket = io();
+
+    // Join consultation room
+    socket.emit('joinRoom', { consultationId });
+    console.log("✅ Joined chat room:", consultationId);
+
+    // SEND MESSAGE
+    const sendMessage = async () => {
+      const message = input.value.trim();
+      if (!message) return;
+
+      const timestamp = Date.now();
+
+      // Emit via socket
+      socket.emit('message', { consultationId, sender: currentUser.name, message, timestamp });
+
+      // Persist message to MongoDB
+      try {
+        await fetch(`/chat/${consultationId}/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sender: currentUser.name, message, timestamp })
+        });
+      } catch (err) {
+        console.error("⚠️ Failed to persist message:", err);
+      }
+
+      input.value = '';
+    };
+
+    if (sendBtn) {
+      sendBtn.addEventListener('click', sendMessage);
+      input.addEventListener('keypress', e => {
+        if (e.key === 'Enter') sendMessage();
+      });
+    }
+
+    // RECEIVE MESSAGE
+    socket.on('message', (data) => {
+      if (!document.getElementById(`msg-${data.timestamp}`)) {
+        const msgEl = document.createElement('div');
+        msgEl.classList.add('msg');
+        msgEl.id = `msg-${data.timestamp}`;
+        msgEl.innerHTML = `<strong>${data.sender}:</strong> ${data.message} 
+          <small style="color:#777;">(${new Date(data.timestamp).toLocaleString()})</small>`;
+        messagesDiv.appendChild(msgEl);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+    });
+
+    // RECEIVE PRESCRIPTION NOTIFICATION
+    socket.on('prescribed', (data) => {
+      alert("Doctor has prescribed a medicine! Check your prescriptions.");
+      // Optionally refresh prescription list via fetch/ajax
+    });
+
+    // RECEIVE CONSULTATION END NOTIFICATION
+    socket.on('consultationEnded', (data) => {
+      if (data.consultationId === consultationId) {
+        alert("This consultation has been ended by the doctor.");
+        window.location.reload(); // reload to show completed state
+      }
+    });
+  </script>
+
+  <style>
+    .chat {
+      max-width: 700px;
+      margin: 2rem auto;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 1rem;
+      background: #fff;
+    }
+
+    #messages {
+      height: 350px;
+      overflow-y: auto;
+      background: #f8f8f8;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+
+    .chat-input {
+      display: flex;
+      gap: 10px;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    .chat-input button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 5px;
+      background: #007bff;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .chat-input button:hover { background: #0056b3; }
+
+    .msg {
+      margin: 6px 0;
+      background: #e9f5ff;
+      padding: 6px 8px;
+      border-radius: 6px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 5px;
+      border: none;
+      background: #28a745;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: #218838; }
+  </style>
+
+  <%- include('partials/footer') %>
+</body>
+</html>
