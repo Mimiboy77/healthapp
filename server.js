@@ -25,8 +25,9 @@ const io = new Server(server);
 
 // ========================
 // CONNECT TO DATABASE
-// ========================
-connectDB(process.env.MONGO_URI);
+
+connectDB(); // no need to pass URI anymore
+
 
 // ========================
 // VIEW ENGINE CONFIG
