@@ -7,37 +7,48 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/client-sockets.js" defer></script>
 </head>
+
 <body>
   <%- include('partials/header') %>
 
   <main class="container">
-    <h2>Welcome, <%= user.name %> </h2>
+    <h2>Welcome, <%= user.name %></h2>
 
-    <p>
-      Your location: 
-      <%= user.location?.lat ? `${user.location.lat.toFixed(4)}, ${user.location.lng.toFixed(4)}` : 'Not set' %>
-      <button id="updateLocation" class="btn small">Update Location</button>
-    </p>
+    <!-- 💰 Mini Wallet Card -->
+    <div class="wallet-card">
+      <p><strong>Available Balance:</strong> <%= currentUser.walletBalance.toFixed(2) %>  HBAR</p>
+      <a href="/wallet" class="btn small">View Full Wallet</a>
+    </div>
+
+    <section class="profile">
+      <p>
+        📍 Your location:
+        <%= user.location?.lat ? `${user.location.lat.toFixed(4)}, ${user.location.lng.toFixed(4)}` : 'Not set' %>
+        <button id="updateLocation" class="btn small">Update Location</button>
+      </p>
+    </section>
+
+    <hr>
 
     <section>
       <h3>Available Doctors Near You</h3>
 
-      <% if (doctors.length === 0) { %>
+      <% if (!doctors || doctors.length === 0) { %>
         <p>No approved doctors available yet.</p>
       <% } else { %>
         <div class="list">
           <% doctors.forEach(function(doc) { %>
             <div class="doctor-card">
-              <h4><%= doc.name %></h4>
+              <h4>👨‍⚕️ <%= doc.name %></h4>
               <p>Email: <%= doc.email %></p>
               <p>
-                Location: 
-                <%= doc.location?.lat 
-                  ? doc.location.lat.toFixed(4) + ', ' + doc.location.lng.toFixed(4) 
+                Location:
+                <%= doc.location?.lat
+                  ? `${doc.location.lat.toFixed(4)}, ${doc.location.lng.toFixed(4)}`
                   : 'Not set' %>
               </p>
               <form action="/patient/request/<%= doc._id %>" method="POST" style="display:inline;">
-                <button type="submit" class="btn">Request Consultation</button>
+                <button type="submit" class="btn">Request Consultation (10 HBAR)</button>
               </form>
             </div>
           <% }) %>
@@ -45,10 +56,46 @@
       <% } %>
     </section>
 
-    <p>
-      <a href="/patient/consultations" class="btn">View Consultations</a> 
-      <a href="/patient/prescriptions" class="btn">Prescriptions</a>
-    </p>
+    <hr>
+
+    <!-- 📜 Wallet Transaction History -->
+    <section class="transactions">
+      <h3>📜 Recent Wallet Transactions</h3>
+
+      <% if (user.wallet && user.wallet.transactions && user.wallet.transactions.length > 0) { %>
+        <table class="tx-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Amount (HBAR)</th>
+              <th>Balance After</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% user.wallet.transactions.slice(-5).reverse().forEach(tx => { %>
+              <tr>
+                <td><%= new Date(tx.date).toLocaleString() %></td>
+                <td><%= tx.description || 'Transaction' %></td>
+                <td style="color:<%= tx.amount >= 0 ? 'green' : 'red' %>;">
+                  <%= tx.amount >= 0 ? '+' : '' %><%= tx.amount %>
+                </td>
+                <td><%= tx.balanceAfter ? tx.balanceAfter.toFixed(2) : '0.00' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } else { %>
+        <p>No transactions yet.</p>
+      <% } %>
+    </section>
+
+    <hr>
+
+    <section class="actions">
+      <a href="/patient/consultations" class="btn">🩺 View Consultations</a>
+      <a href="/patient/prescriptions" class="btn">💊 Prescriptions</a>
+    </section>
   </main>
 
   <script>
@@ -72,23 +119,71 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lat: latitude, lng: longitude })
           });
-          alert('Location updated. Refreshing...');
+          alert('✅ Location updated! Refreshing...');
           location.reload();
-        }, () => alert('Failed to get location.'));
+        }, () => alert('❌ Failed to get location.'));
       } else {
-        alert('Geolocation not supported.');
+        alert('⚠️ Geolocation not supported on this device.');
       }
+    });
+
+    // ========================
+    // REALTIME NOTIFICATIONS
+    // ========================
+    const socket = io();
+    socket.on('prescriptionAccepted', (data) => {
+      alert(`💊 Your prescription was accepted by ${data.pharmacyName}!`);
+    });
+
+    socket.on('newPrescription', (data) => {
+      alert(`🩺 New prescription from Dr. ${data.fromDoctor}. Check your prescriptions page.`);
+    });
+
+    socket.on('consultationAccepted', (data) => {
+      alert(`✅ Dr. ${data.doctorName} accepted your consultation request!`);
     });
   </script>
 
   <style>
+    body {
+      background: #f2f6fa;
+      font-family: Arial, sans-serif;
+    }
     .container {
-      max-width: 900px;
+      max-width: 950px;
       margin: 2rem auto;
-      padding: 1rem;
+      padding: 2rem;
       background: #fff;
       border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2, h3 {
+      color: #0a4d8c;
+    }
+
+    /* 💰 Wallet card styles */
+    .wallet-card {
+      background: linear-gradient(135deg, #007bff, #00c6ff);
+      color: #fff;
+      padding: 1rem 1.5rem;
+      border-radius: 10px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .wallet-card p {
+      margin: 0;
+      font-size: 1.1em;
+    }
+    .wallet-card .btn.small {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      font-weight: 500;
+    }
+    .wallet-card .btn.small:hover {
+      background: rgba(255,255,255,0.35);
     }
 
     .doctor-card {
@@ -97,6 +192,7 @@
       border-radius: 8px;
       margin-bottom: 1rem;
       background: #f9f9f9;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
 
     .btn {
@@ -108,12 +204,11 @@
       border: none;
       border-radius: 5px;
       cursor: pointer;
+      transition: background 0.2s;
     }
-
     .btn:hover {
       background: #0056b3;
     }
-
     .btn.small {
       padding: 5px 10px;
       font-size: 0.85em;
@@ -123,6 +218,37 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       gap: 1rem;
+    }
+
+    hr {
+      border: none;
+      height: 1px;
+      background: #eee;
+      margin: 2em 0;
+    }
+
+    .actions {
+      text-align: center;
+      margin-top: 1rem;
+    }
+
+    /* 📜 Transaction history table */
+    .transactions {
+      margin-top: 2rem;
+    }
+    .tx-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1em;
+    }
+    .tx-table th, .tx-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    .tx-table th {
+      background: #0a4d8c;
+      color: #fff;
     }
   </style>
 

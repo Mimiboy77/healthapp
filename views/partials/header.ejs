@@ -1,13 +1,134 @@
 <header>
   <nav class="topbar">
-    <div class="brand"><a href="/">HealthApp</a></div>
-    <div class="right">
-      <% if (currentUser) { %>
-        <span class="username"><%= currentUser.name %>  (<%= currentUser.role %>)</span>
-        <a href="/logout" class="btn small">Logout</a>
-      <% } else { %>
-        <a href="/select-role" class="btn small">Get Started</a>
-      <% } %>
+    <div class="brand">
+      <a href="/">🏥 <strong>HealthApp</strong></a>
     </div>
+
+    <% if (currentUser) { %>
+      <div class="nav-links">
+        <% if (currentUser.role === 'patient') { %>
+          <a href="/patient/dashboard">Dashboard</a>
+          <a href="/patient/prescriptions">Prescriptions</a>
+        <% } else if (currentUser.role === 'doctor') { %>
+          <a href="/doctor/dashboard">Dashboard</a>
+        <% } else if (currentUser.role === 'pharmacy') { %>
+          <a href="/pharmacy/dashboard">Dashboard</a>
+        <% } else if (currentUser.role === 'admin') { %>
+          <a href="/admin/dashboard">Dashboard</a>
+        <% } %>
+        <a href="/wallet">💰 Wallet</a>
+      </div>
+
+      <div class="right">
+        <div class="status">
+          <span class="username">
+            <%= currentUser.name %> (<%= currentUser.role %>)
+          </span>
+
+          <% if (typeof currentUser.walletBalance !== 'undefined') { %>
+            <span class="wallet">
+              💰 <%= currentUser.walletBalance.toFixed(2) %> HBAR
+            </span>
+          <% } %>
+        </div>
+
+        <!-- 🔔 Notification bell -->
+        <div id="notify-bell" class="notify-bell" title="Notifications">
+          🔔
+          <span id="notify-count" class="notify-count" style="display:none;">0</span>
+        </div>
+
+        <a href="/logout" class="btn small">Logout</a>
+      </div>
+    <% } else { %>
+      <div class="right">
+        <a href="/select-role" class="btn small">Get Started</a>
+      </div>
+    <% } %>
   </nav>
+
+  <style>
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.8em 1.5em;
+      background: #0a4d8c;
+      color: #fff;
+    }
+    .brand a {
+      color: white;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    .nav-links a {
+      color: white;
+      margin-right: 1em;
+      text-decoration: none;
+    }
+    .nav-links a:hover { text-decoration: underline; }
+    .right {
+      display: flex;
+      align-items: center;
+      gap: 1em;
+    }
+    .wallet {
+      margin-left: 0.5em;
+      font-weight: bold;
+      color: #ffd700;
+    }
+    .notify-bell {
+      cursor: pointer;
+      position: relative;
+      font-size: 1.3em;
+    }
+    .notify-count {
+      position: absolute;
+      top: -5px;
+      right: -10px;
+      background: red;
+      color: white;
+      border-radius: 50%;
+      padding: 0.2em 0.5em;
+      font-size: 0.7em;
+    }
+  </style>
+
+  <script>
+    // 🔔 Notification + Socket.IO Handler
+    const socket = io();
+    const bell = document.getElementById('notify-bell');
+    const count = document.getElementById('notify-count');
+    let notifCount = 0;
+
+    <% if (currentUser) { %>
+      if (window.HealthSockets) {
+        window.HealthSockets.joinPersonalRoom(
+          <%- JSON.stringify(currentUser.role) %>,
+          <%- JSON.stringify(currentUser._id) %>
+        );
+      }
+
+      socket.on('newPrescription', data => {
+        notifCount++;
+        count.textContent = notifCount;
+        count.style.display = 'inline';
+        alert(`New prescription from Dr. ${data.fromDoctor}`);
+      });
+
+      socket.on('consultationAccepted', data => {
+        notifCount++;
+        count.textContent = notifCount;
+        count.style.display = 'inline';
+        alert(`Doctor ${data.doctorName} accepted your consultation!`);
+      });
+
+      socket.on('transaction', data => {
+        notifCount++;
+        count.textContent = notifCount;
+        count.style.display = 'inline';
+        console.log('Transaction update:', data);
+      });
+    <% } %>
+  </script>
 </header>

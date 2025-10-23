@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Wallet - <%= user.name %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <%- include('partials/header') %>
+
+  <main class="container">
+    <h2>💰 Wallet Overview</h2>
+
+    <section class="wallet-info">
+      <p><strong>Account Number:</strong> <%= user.accountNumber || 'Not assigned yet' %></p>
+      <p><strong>Hedera Account ID:</strong> <%= user.wallet?.accountId || 'Not linked yet' %></p>
+      <p><strong>Balance:</strong> <%= user.wallet?.balance?.toFixed(2) || '0.00' %> HBAR</p>
+
+      <form method="POST" action="/wallet/refresh">
+        <button class="btn small">🔄 Refresh Balance</button>
+      </form>
+    </section>
+
+    <hr>
+
+    <section class="transactions">
+      <h3>📜 Recent Transactions</h3>
+
+      <% if (user.wallet?.transactions && user.wallet.transactions.length > 0) { %>
+        <table class="tx-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Amount (HBAR)</th>
+              <th>Balance After</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% user.wallet.transactions.slice(-10).reverse().forEach(tx => { %>
+              <tr>
+                <td><%= new Date(tx.date).toLocaleString() %></td>
+                <td><%= tx.description || 'Transaction' %></td>
+                <td style="color:<%= tx.amount >= 0 ? 'green' : 'red' %>;">
+                  <%= tx.amount >= 0 ? '+' : '' %><%= tx.amount %>
+                </td>
+                <td><%= tx.balanceAfter?.toFixed(2) || '0.00' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } else { %>
+        <p>No recent transactions yet.</p>
+      <% } %>
+    </section>
+
+    <hr>
+
+    <p>
+      <% if (user.role === 'patient') { %>
+        <a href="/patient/dashboard" class="btn small">← Back to Dashboard</a>
+      <% } else if (user.role === 'doctor') { %>
+        <a href="/doctor/dashboard" class="btn small">← Back to Dashboard</a>
+      <% } else if (user.role === 'pharmacy') { %>
+        <a href="/pharmacy/dashboard" class="btn small">← Back to Dashboard</a>
+      <% } %>
+    </p>
+  </main>
+
+  <style>
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .wallet-info p {
+      font-size: 1.1em;
+      margin: 0.4em 0;
+    }
+
+    .tx-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1em;
+    }
+
+    .tx-table th, .tx-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+
+    .tx-table th {
+      background: #0a4d8c;
+      color: #fff;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 8px 14px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .btn.small {
+      padding: 5px 10px;
+      font-size: 0.9em;
+    }
+
+    .btn:hover {
+      background: #0056b3;
+    }
+  </style>
+
+  <%- include('partials/footer') %>
+</body>
+</html>

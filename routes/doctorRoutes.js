@@ -3,25 +3,40 @@ const router = express.Router();
 const { requireRole } = require('../middleware/roles');
 const Consultation = require('../models/Consultation');
 const Prescription = require('../models/Prescription');
+const Transaction = require('../models/Transaction');
+const Wallet = require('../models/Wallet');
 const User = require('../models/User');
 
-// Helper to calculate simple distance
+// Simple distance approximation helper
 function distanceApprox(a, b) {
   return Math.abs((a?.lat || 0) - (b?.lat || 0)) + Math.abs((a?.lng || 0) - (b?.lng || 0));
 }
 
 // ==========================
-// Doctor dashboard: pending, accepted, completed
+// DOCTOR DASHBOARD
 // ==========================
 router.get('/dashboard', requireRole('doctor'), async (req, res) => {
   try {
-    const [pending, accepted, completed] = await Promise.all([
-      Consultation.find({ doctor: req.user._id, status: 'pending' }).populate('patient').sort({ createdAt: -1 }),
-      Consultation.find({ doctor: req.user._id, status: 'accepted' }).populate('patient').sort({ createdAt: -1 }),
-      Consultation.find({ doctor: req.user._id, status: 'completed' }).populate('patient').sort({ createdAt: -1 }),
+    const [pending, accepted, completed, wallet] = await Promise.all([
+      Consultation.find({ doctor: req.user._id, status: 'pending' })
+        .populate('patient')
+        .sort({ createdAt: -1 }),
+      Consultation.find({ doctor: req.user._id, status: 'accepted' })
+        .populate('patient')
+        .sort({ createdAt: -1 }),
+      Consultation.find({ doctor: req.user._id, status: 'completed' })
+        .populate('patient')
+        .sort({ createdAt: -1 }),
+      Wallet.findOne({ user: req.user._id }),
     ]);
 
-    res.render('doctor_dashboard', { user: req.user, pending, accepted, completed });
+    res.render('doctor_dashboard', {
+      user: req.user,
+      pending,
+      accepted,
+      completed,
+      walletBalance: wallet ? wallet.balance.toFixed(2) : '0.00',
+    });
   } catch (err) {
     console.error('Dashboard error:', err);
     res.status(500).send('Error loading dashboard');
@@ -29,18 +44,18 @@ router.get('/dashboard', requireRole('doctor'), async (req, res) => {
 });
 
 // ==========================
-// Accept consultation
+// ACCEPT CONSULTATION
 // ==========================
 router.post('/approve/:consultationId', requireRole('doctor'), async (req, res) => {
   try {
     const { consultationId } = req.params;
     const cons = await Consultation.findOneAndUpdate(
-      { _id: consultationId, doctor: req.user._id },
+      { _id: consultationId, doctor: req.user._id, status: 'pending' },
       { status: 'accepted' },
       { new: true }
     ).populate('patient doctor');
 
-    if (!cons) return res.status(404).json({ ok: false, msg: 'Consultation not found' });
+    if (!cons) return res.status(404).json({ ok: false, msg: 'Consultation not found or already handled' });
 
     const io = req.app.get('io');
     if (io && cons.patient?._id) {
@@ -59,7 +74,7 @@ router.post('/approve/:consultationId', requireRole('doctor'), async (req, res) 
 });
 
 // ==========================
-// Decline consultation
+// DECLINE CONSULTATION
 // ==========================
 router.post('/decline/:consultationId', requireRole('doctor'), async (req, res) => {
   try {
@@ -70,7 +85,7 @@ router.post('/decline/:consultationId', requireRole('doctor'), async (req, res) 
       { new: true }
     ).populate('patient');
 
-    if (!cons) return res.status(404).json({ ok: false, msg: 'Not found' });
+    if (!cons) return res.status(404).json({ ok: false, msg: 'Consultation not found' });
 
     const io = req.app.get('io');
     if (io && cons.patient?._id) {
@@ -85,11 +100,12 @@ router.post('/decline/:consultationId', requireRole('doctor'), async (req, res) 
 });
 
 // ==========================
-// Chat room (doctor ↔ patient)
+// CHAT ROOM (Doctor ↔ Patient)
 // ==========================
 router.get('/chat/:consultationId', requireRole('doctor'), async (req, res) => {
   try {
-    const consultation = await Consultation.findById(req.params.consultationId).populate('patient doctor');
+    const consultation = await Consultation.findById(req.params.consultationId)
+      .populate('patient doctor');
 
     if (!consultation || consultation.doctor._id.toString() !== req.user._id.toString()) {
       return res.status(404).send('Consultation not found');
@@ -111,23 +127,7 @@ router.get('/chat/:consultationId', requireRole('doctor'), async (req, res) => {
 });
 
 // ==========================
-// Prescribe medicine page
-// ==========================
-router.get('/prescribe/:consultationId', requireRole('doctor'), async (req, res) => {
-  try {
-    const consultation = await Consultation.findById(req.params.consultationId).populate('patient doctor');
-    if (!consultation || consultation.doctor._id.toString() !== req.user._id.toString()) {
-      return res.status(404).send('Consultation not found');
-    }
-    res.render('prescribe', { consultation, user: req.user });
-  } catch (err) {
-    console.error('Load prescribe page error:', err);
-    res.status(500).send('Error loading prescribe page');
-  }
-});
-
-// ==========================
-// Handle prescription submission
+// PRESCRIBE MEDICINE + WALLET REWARD
 // ==========================
 router.post('/prescribe/:consultationId', requireRole('doctor'), async (req, res) => {
   try {
@@ -135,17 +135,19 @@ router.post('/prescribe/:consultationId', requireRole('doctor'), async (req, res
     const consultation = await Consultation.findById(consultationId).populate('patient doctor');
     if (!consultation) return res.status(404).send('Consultation not found');
 
-    // Convert form fields into array of items
-    let items = [];
+    // Format prescription items
+    const items = [];
     if (Array.isArray(req.body.name)) {
       for (let i = 0; i < req.body.name.length; i++) {
-        items.push({
-          name: req.body.name[i],
-          dose: req.body.dose[i],
-          qty: parseInt(req.body.qty[i], 10),
-        });
+        if (req.body.name[i]) {
+          items.push({
+            name: req.body.name[i],
+            dose: req.body.dose[i],
+            qty: parseInt(req.body.qty[i], 10),
+          });
+        }
       }
-    } else {
+    } else if (req.body.name) {
       items.push({
         name: req.body.name,
         dose: req.body.dose,
@@ -153,6 +155,7 @@ router.post('/prescribe/:consultationId', requireRole('doctor'), async (req, res
       });
     }
 
+    // Create prescription
     const pres = await Prescription.create({
       consultation: consultation._id,
       doctor: req.user._id,
@@ -160,38 +163,39 @@ router.post('/prescribe/:consultationId', requireRole('doctor'), async (req, res
       items,
     });
 
-    // Nearby pharmacies (top 3)
+    // Nearby pharmacies
     let pharmacies = await User.find({ role: 'pharmacy', approved: true }).lean();
-    pharmacies = pharmacies.filter(p => p._id);
     pharmacies.sort((A, B) => distanceApprox(A.location, req.user.location) - distanceApprox(B.location, req.user.location));
     const top = pharmacies.slice(0, 3);
 
     pres.sentToPharmacies = top.map(p => p._id);
     await pres.save();
 
-    const io = req.app.get('io');
-    if (!io) throw new Error('Socket.IO not initialized');
-
-    // Notify pharmacies
-    top.forEach(p => {
-      if (p._id) {
-        io.to(`pharmacy-${p._id}`).emit('newPrescription', {
-          prescriptionId: pres._id,
-          fromDoctor: req.user.name,
-        });
-      }
-    });
-
-    // Notify patient
-    if (consultation.patient?._id) {
-      io.to(`patient-${consultation.patient._id}`).emit('prescribed', { prescriptionId: pres._id });
-    }
-
     // Mark consultation completed
     consultation.status = 'completed';
     await consultation.save();
 
-    res.send('Prescription sent successfully!');
+    // Reward doctor 1 HBAR
+    const doctorWallet = await Wallet.findOne({ user: req.user._id });
+    if (doctorWallet) {
+      doctorWallet.balance += 1;
+      await doctorWallet.save();
+
+      await Transaction.create({
+        from: null,
+        to: req.user._id,
+        amount: 1,
+        type: 'bonus',
+        meta: { note: 'Consultation completion reward' },
+      });
+    }
+
+    // Notifications
+    const io = req.app.get('io');
+    top.forEach(p => io?.to(`pharmacy-${p._id}`).emit('newPrescription', { prescriptionId: pres._id, fromDoctor: req.user.name }));
+    io?.to(`patient-${consultation.patient._id}`).emit('prescribed', { prescriptionId: pres._id });
+
+    res.send('✅ Prescription sent successfully! Doctor rewarded 1 HBAR.');
   } catch (err) {
     console.error('Prescribe error:', err);
     res.status(500).send('Error sending prescription');
@@ -199,7 +203,7 @@ router.post('/prescribe/:consultationId', requireRole('doctor'), async (req, res
 });
 
 // ==========================
-// End consultation manually
+// END CONSULTATION MANUALLY
 // ==========================
 router.post('/end/:consultationId', requireRole('doctor'), async (req, res) => {
   try {
@@ -212,10 +216,22 @@ router.post('/end/:consultationId', requireRole('doctor'), async (req, res) => {
     consultation.status = 'completed';
     await consultation.save();
 
-    const io = req.app.get('io');
-    if (io && consultation.patient?._id) {
-      io.to(`patient-${consultation.patient._id}`).emit('consultationEnded', { consultationId: consultation._id });
+    // Reward doctor manually if not rewarded yet
+    const doctorWallet = await Wallet.findOne({ user: req.user._id });
+    if (doctorWallet) {
+      doctorWallet.balance += 1;
+      await doctorWallet.save();
+      await Transaction.create({
+        from: null,
+        to: req.user._id,
+        amount: 1,
+        type: 'bonus',
+        meta: { note: 'Manual consultation end reward' },
+      });
     }
+
+    const io = req.app.get('io');
+    io?.to(`patient-${consultation.patient._id}`).emit('consultationEnded', { consultationId: consultation._id });
 
     res.json({ ok: true });
   } catch (err) {
@@ -223,5 +239,11 @@ router.post('/end/:consultationId', requireRole('doctor'), async (req, res) => {
     res.status(500).json({ ok: false });
   }
 });
+// middleware/roles.js probably sets req.session.user not req.user
+router.use((req, res, next) => {
+  if (req.session.user) req.user = req.session.user;
+  next();
+});
+
 
 module.exports = router;

@@ -6,41 +6,127 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/client-sockets.js" defer></script>
+  <style>
+    .pres-card {
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 1em;
+      margin: 0.8em 0;
+      background: #f9f9f9;
+    }
+    .pres-card.completed { background: #e6ffe6; }
+    .pres-card.accepted { background: #e6f0ff; }
+    .pres-card.pending { background: #fff6e6; }
+    .pres-card h4 { margin: 0 0 0.5em; }
+    .btn {
+      padding: 0.5em 1em;
+      margin-top: 0.5em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .btn.accept { background-color: #4CAF50; color: white; }
+    .btn.complete { background-color: #007bff; color: white; }
+  </style>
 </head>
 <body>
   <%- include('partials/header') %>
+
   <main class="container">
-    <h2>Welcome, <%= user.name %></h2>
+    <h2>Welcome, <%= user.name %> 👋</h2>
+
+    <!-- NEW PRESCRIPTIONS -->
     <section>
-      <h3>New Prescriptions</h3>
-      <% if (!pres || !pres.length) { %>
-        <p>No prescriptions</p>
+      <h3>🧾 New Prescriptions</h3>
+      <% const newPres = pres.filter(p => !p.status || p.status === 'pending'); %>
+      <% if (!newPres.length) { %>
+        <p>No new prescriptions right now.</p>
+      <% } else { %>
+        <% newPres.forEach(p => { %>
+          <div class="pres-card pending">
+            <h4>From Dr. <%= p.doctor ? p.doctor.name : 'Unknown' %></h4>
+            <p><strong>Patient:</strong> <%= p.patient ? p.patient.name : 'N/A' %></p>
+            <p><strong>Items:</strong> <%= p.items.map(i => i.name + ' (' + i.qty + ')').join(', ') %></p>
+            <button class="btn accept" data-id="<%= p._id %>">Accept</button>
+          </div>
+        <% }) %>
       <% } %>
-      <% pres.forEach(p => { %>
-        <div class="pres">
-          <p>From Dr: <%= p.doctor ? p.doctor.name : 'N/A' %></p>
-          <p>Items: <%= p.items.map(i=>i.name).join(', ') %></p>
-          <p>Patient: <%= p.patient ? p.patient.name : 'N/A' %></p>
-          <button class="btn accept" data-id="<%= p._id %>">Accept</button>
-        </div>
-      <% }) %>
+    </section>
+
+    <!-- ACCEPTED PRESCRIPTIONS -->
+    <section>
+      <h3>📦 Accepted Prescriptions</h3>
+      <% const acceptedPres = pres.filter(p => p.status === 'accepted'); %>
+      <% if (!acceptedPres.length) { %>
+        <p>No accepted prescriptions yet.</p>
+      <% } else { %>
+        <% acceptedPres.forEach(p => { %>
+          <div class="pres-card accepted">
+            <h4>From Dr. <%= p.doctor ? p.doctor.name : 'Unknown' %></h4>
+            <p><strong>Patient:</strong> <%= p.patient ? p.patient.name : 'N/A' %></p>
+            <p><strong>Items:</strong> <%= p.items.map(i => i.name + ' (' + i.qty + ')').join(', ') %></p>
+            <button class="btn complete" data-id="<%= p._id %>">Mark as Completed</button>
+          </div>
+        <% }) %>
+      <% } %>
+    </section>
+
+    <!-- COMPLETED PRESCRIPTIONS -->
+    <section>
+      <h3>✅ Completed Prescriptions</h3>
+      <% const donePres = pres.filter(p => p.status === 'completed'); %>
+      <% if (!donePres.length) { %>
+        <p>No completed prescriptions yet.</p>
+      <% } else { %>
+        <% donePres.forEach(p => { %>
+          <div class="pres-card completed">
+            <h4>From Dr. <%= p.doctor ? p.doctor.name : 'Unknown' %></h4>
+            <p><strong>Patient:</strong> <%= p.patient ? p.patient.name : 'N/A' %></p>
+            <p><strong>Items:</strong> <%= p.items.map(i => i.name + ' (' + i.qty + ')').join(', ') %></p>
+            <small><em>Completed on: <%= new Date(p.completedAt).toLocaleString() %></em></small>
+          </div>
+        <% }) %>
+      <% } %>
     </section>
   </main>
 
   <script>
     const currentUser = <%- JSON.stringify(user) %>;
+
     if (window.HealthSockets && currentUser) {
       window.HealthSockets.joinPersonalRoom(currentUser.role, currentUser._id);
     }
 
-    document.querySelectorAll('.accept').forEach(b => {
-      b.addEventListener('click', async ()=>{
-        const res = await fetch(`/pharmacy/accept/${b.dataset.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        const j = await res.json();
-        if (j.ok) alert('Accepted'); else alert('Error');
+    // Accept Prescription
+    document.querySelectorAll('.accept').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const res = await fetch(`/pharmacy/accept/${btn.dataset.id}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) alert('✅ Prescription accepted successfully');
+        else alert('⚠️ Error: ' + (data.msg || 'Try again'));
         location.reload();
       });
     });
+
+    // Mark as Completed
+    document.querySelectorAll('.complete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const res = await fetch(`/pharmacy/complete/${btn.dataset.id}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) alert('🎉 Prescription marked as completed');
+        else alert('⚠️ Error: ' + (data.msg || 'Try again'));
+        location.reload();
+      });
+    });
+
+    // Real-time updates for new prescriptions
+    if (window.io) {
+      const socket = io();
+      socket.on('newPrescription', data => {
+        alert(`🆕 New prescription from Dr. ${data.fromDoctor}`);
+        location.reload();
+      });
+    }
   </script>
 
   <%- include('partials/footer') %>

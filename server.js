@@ -7,6 +7,7 @@ const MongoStore = require('connect-mongo');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const Consultation = require('./models/Consultation');
+const User = require('./models/User'); // ✅ add this
 
 // Import routes
 const connectDB = require('./config/db');
@@ -16,6 +17,7 @@ const doctorRoutes = require('./routes/doctorRoutes');
 const pharmacyRoutes = require('./routes/pharmacyRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -65,10 +67,23 @@ app.use((req, res, next) => {
   next();
 });
 
-// Make user available in EJS templates
-app.use((req, res, next) => {
-  res.locals.currentUser = req.session.user || null;
-  next();
+// ✅ Always refresh session user before rendering views
+app.use(async (req, res, next) => {
+  try {
+    if (req.session.user?._id) {
+      const freshUser = await User.findById(req.session.user._id).lean();
+      if (freshUser) {
+        req.session.user = freshUser;
+        res.locals.currentUser = freshUser;
+      }
+    } else {
+      res.locals.currentUser = null;
+    }
+    next();
+  } catch (err) {
+    console.error('Error refreshing session user:', err);
+    next();
+  }
 });
 
 // ========================
@@ -80,6 +95,7 @@ app.use('/doctor', doctorRoutes);
 app.use('/pharmacy', pharmacyRoutes);
 app.use('/admin', adminRoutes);
 app.use('/chat', chatRoutes);
+app.use('/wallet', walletRoutes); // ✅ changed from "/" to "/wallet" for clarity
 
 // Default route
 app.get('/', (req, res) => res.redirect('/select-role'));
@@ -90,9 +106,7 @@ app.get('/', (req, res) => res.redirect('/select-role'));
 io.on('connection', (socket) => {
   console.log('🔌 User connected to socket');
 
-  // ======================
   // JOIN CONSULTATION ROOM
-  // ======================
   socket.on('joinRoom', ({ consultationId }) => {
     if (!consultationId) return;
 
@@ -104,9 +118,7 @@ io.on('connection', (socket) => {
     console.log(`✅ Joined room: ${consultationId}`);
   });
 
-  // ======================
   // MESSAGE HANDLER
-  // ======================
   socket.on('message', async (data) => {
     try {
       let { consultationId, sender, message, timestamp } = data;
@@ -124,7 +136,7 @@ io.on('connection', (socket) => {
       // Broadcast message to room
       io.to(consultationId).emit('message', { sender, message, timestamp });
 
-      // Persist message in DB
+      // Save chat message to DB
       const cons = await Consultation.findById(consultationId);
       if (cons) {
         cons.messages.push({ sender, message, timestamp: timestamp || Date.now() });
@@ -137,9 +149,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ======================
-  // PRESCRIPTION NOTIFICATIONS (OPTIONAL)
-  // ======================
+  // PRESCRIPTION NOTIFICATIONS
   socket.on('subscribePrescriptions', (userId) => {
     if (userId) socket.join(`user-${userId}`);
   });
@@ -153,4 +163,6 @@ io.on('connection', (socket) => {
 // START SERVER
 // ========================
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+server.listen(PORT, () =>
+  console.log(`🚀 Server running on http://localhost:${PORT}`)
+);
